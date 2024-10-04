@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #87CEEB, #E0F6FF);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.8);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button, select, input {
+            margin: 5px;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        select, input {
+            background-color: white;
+            color: #333;
+        }
+        #dashboard, #timeBreakdown, #historySection, #loginForm {
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Daily Tracker</h1>
+        
+        <div id="loginForm">
+            <h2>Login</h2>
+            <input type="text" id="username" placeholder="Username">
+            <input type="password" id="password" placeholder="Password">
+            <button onclick="login()">Login</button>
+            <button onclick="register()">Register</button>
+        </div>
+
+        <div id="appContent" style="display: none;">
+            <div id="logActivity">
+                <h2>Log an Activity</h2>
+                <select id="activityType">
+                    <option value="smoking">Smoking</option>
+                    <option value="snacking">Snacking</option>
+                    <option value="social_media">Social Media</option>
+                </select>
+                <button onclick="logActivity(true)">Resisted</button>
+                <button onclick="logActivity(false)">Gave In</button>
+            </div>
+
+            <div id="dashboard">
+                <h2>Today's Dashboard</h2>
+                <p>Total activities: <span id="totalActivities">0</span></p>
+                <p>Activities resisted: <span id="activitiesResisted">0</span></p>
+                <p>Success rate: <span id="successRate">0</span>%</p>
+            </div>
+
+            <div id="timeBreakdown">
+                <h2>Today's Time Breakdown</h2>
+                <table id="timeTable">
+                    <tr>
+                        <th>Time Range</th>
+                        <th>Total Activities</th>
+                        <th>Resisted</th>
+                        <th>Success Rate</th>
+                    </tr>
+                </table>
+            </div>
+
+            <div id="historySection">
+                <h2>History</h2>
+                <select id="historyDate" onchange="showHistoryForDate()"></select>
+                <div id="historyData"></div>
+            </div>
+
+            <button onclick="logout()">Logout</button>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let dailyLogs = {};
+        const timeRanges = [
+            "00:00-03:59", "04:00-07:59", "08:00-11:59",
+            "12:00-15:59", "16:00-19:59", "20:00-23:59"
+        ];
+
+        function getTodayDate() {
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const users = JSON.parse(localStorage.getItem('users')) || {};
+
+            if (users[username] && users[username].password === password) {
+                currentUser = username;
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('appContent').style.display = 'block';
+                loadLogs();
+            } else {
+                alert('Invalid username or password');
+            }
+        }
+
+        function register() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const users = JSON.parse(localStorage.getItem('users')) || {};
+
+            if (users[username]) {
+                alert('Username already exists');
+            } else {
+                users[username] = { password: password };
+                localStorage.setItem('users', JSON.stringify(users));
+                alert('Registration successful. You can now login.');
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('loginForm').style.display = 'block';
+            document.getElementById('appContent').style.display = 'none';
+        }
+
+        function logActivity(resisted) {
+            const today = getTodayDate();
+            if (!dailyLogs[today]) {
+                dailyLogs[today] = [];
+            }
+            const type = document.getElementById('activityType').value;
+            const timestamp = new Date().toISOString();
+            dailyLogs[today].push({ type, timestamp, resisted });
+            updateDashboard();
+            updateTimeBreakdown();
+            saveLogs();
+            updateHistoryDropdown();
+        }
+
+        function updateDashboard() {
+            const today = getTodayDate();
+            const activities = dailyLogs[today] || [];
+            const total = activities.length;
+            const resisted = activities.filter(a => a.resisted).length;
+            const rate = total > 0 ? (resisted / total * 100).toFixed(2) : 0;
+
+            document.getElementById('totalActivities').textContent = total;
+            document.getElementById('activitiesResisted').textContent = resisted;
+            document.getElementById('successRate').textContent = rate;
+        }
+
+        function updateTimeBreakdown() {
+            const table = document.getElementById('timeTable');
+            table.innerHTML = '<tr><th>Time Range</th><th>Total Activities</th><th>Resisted</th><th>Success Rate</th></tr>';
+
+            const today = getTodayDate();
+            const activities = dailyLogs[today] || [];
+
+            timeRanges.forEach(range => {
+                const [start, end] = range.split('-');
+                const rangeActivities = activities.filter(a => {
+                    const hour = new Date(a.timestamp).getHours();
+                    return hour >= parseInt(start) && hour < parseInt(end);
+                });
+
+                const total = rangeActivities.length;
+                const resisted = rangeActivities.filter(a => a.resisted).length;
+                const rate = total > 0 ? (resisted / total * 100).toFixed(2) : 0;
+
+                const row = table.insertRow();
+                row.insertCell(0).textContent = range;
+                row.insertCell(1).textContent = total;
+                row.insertCell(2).textContent = resisted;
+                row.insertCell(3).textContent = rate + '%';
+            });
+        }
+
+        function saveLogs() {
+            localStorage.setItem(`logs_${currentUser}`, JSON.stringify(dailyLogs));
+        }
+
+        function loadLogs() {
+            const saved = localStorage.getItem(`logs_${currentUser}`);
+            if (saved) {
+                dailyLogs = JSON.parse(saved);
+                updateDashboard();
+                updateTimeBreakdown();
+                updateHistoryDropdown();
+            }
+        }
+
+        function updateHistoryDropdown() {
+            const select = document.getElementById('historyDate');
+            select.innerHTML = '';
+            Object.keys(dailyLogs).sort().reverse().forEach(date => {
+                const option = document.createElement('option');
+                option.value = option.textContent = date;
+                select.appendChild(option);
+            });
+            showHistoryForDate();
+        }
+
+        function showHistoryForDate() {
+            const date = document.getElementById('historyDate').value;
+            const activities = dailyLogs[date] || [];
+            const total = activities.length;
+            const resisted = activities.filter(a => a.resisted).length;
+            const rate = total > 0 ? (resisted / total * 100).toFixed(2) : 0;
+
+            const historyData = document.getElementById('historyData');
+            historyData.innerHTML = `
+                <h3>Summary for ${date}</h3>
+                <p>Total activities: ${total}</p>
+                <p>Activities resisted: ${resisted}</p>
+                <p>Success rate: ${rate}%</p>
+            `;
+        }
+    </script>
+</div>
+</body>
+</html>
